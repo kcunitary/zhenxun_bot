@@ -420,3 +420,20 @@ def pic2bytes(image) -> bytes:
     buf = BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
+
+
+async def get_image(url):
+    try:
+        resp = await AsyncHttpx.get(url)
+        if resp.status_code == 200:
+            img = Image.open(BytesIO(resp.content))
+            return img
+    except Exception as e:
+        logger.error(f"获取图片错误", "chat_history", e=e)
+        return None
+
+async def get_image_wh(url):
+    img = await get_image(url)
+    if img:
+        return img.size
+    return [0, 0]

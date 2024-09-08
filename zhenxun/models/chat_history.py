@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Literal, Tuple
 
+import pytz
 from tortoise import fields
 from tortoise.functions import Count
 from typing_extensions import Self
@@ -114,6 +115,17 @@ class ChatHistory(Model):
             elif isinstance(days, tuple):
                 query = query.filter(create_time__range=days)
         return await query.all()  # type: ignore
+
+    @classmethod
+    async def get_message_by_text(cls, gid: str, plain_text: str) -> list[Self]:
+        """获取消息查询query
+
+        参数:
+            uid: 用户id
+            gid: 群聊id
+            plain_text：搜索文本
+        """
+        return await cls.filter(group_id=gid, plain_text=plain_text).all()
 
     @classmethod
     async def _run_script(cls):

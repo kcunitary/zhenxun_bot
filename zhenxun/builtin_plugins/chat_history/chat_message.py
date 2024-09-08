@@ -1,4 +1,5 @@
 from math import log
+import imagehash
 from nonebot import on_message
 from nonebot.plugin import PluginMetadata
 from nonebot_plugin_alconna import UniMsg
@@ -13,10 +14,10 @@ from zhenxun.models.pic_history import ChatPicHistory
 from zhenxun.services.log import logger
 from zhenxun.utils.enum import PluginType
 from zhenxun.utils.http_utils import AsyncHttpx
+from zhenxun.utils.image_utils import get_image
 
 from urllib.parse import urlparse, parse_qs
-from PIL import Image as ImagePIL
-from io import BytesIO
+
 
 __plugin_meta__ = PluginMetadata(
     name="消息存储",
@@ -62,19 +63,6 @@ def get_url_hash(url):
         return None
 
 
-async def get_image_wh(url):
-    try:
-        resp = await AsyncHttpx.get(url)
-        if resp.status_code == 200:
-            img = ImagePIL.open(BytesIO(resp.content))
-            return img.size
-        else:
-            return [0, 0]
-    except Exception as e:
-        logger.error(f"获取图片宽高错误", "chat_history", e=e)
-        return [0, 0]
-
-
 @chat_history.handle()
 async def _(message: UniMsg, session: EventSession):
     # group_id = session.id3 or session.id2
@@ -98,26 +86,35 @@ async def _(message: UniMsg, session: EventSession):
 
             sub_type = pic.origin.data.get("subType", 0)
             if sub_type == 0:
-                img_width, img_height = await get_image_wh(pic.url)
-                img_hash = pic.origin.data.get("filename", "")
-                url_hash = get_url_hash(pic.url)
-                record = ChatPicHistory(
-                    user_id=session.id1,
-                    group_id=group_id,
-                    url=pic.url,
-                    url_hash=url_hash,
-                    img_width=img_width,
-                    img_height=img_height,
-                    img_hash=img_hash,
-                    bot_id=session.bot_id,
-                    platform=session.platform,
-                )
-                TEMP_PIC_LIST.append(record)
+                img = await get_image(pic.url)
+                if img:
+                    img_width, img_height = img.size if img else (0, 0)
+                    img_hash = pic.origin.data.get("filename", "")
+                    url_hash = get_url_hash(pic.url)
+                    dhash = str(imagehash.dhash(img))
+                    for i in range(4):
+                        hash_segment = dhash[i * 4 : (i + 1) * 4]
+                        record = ChatPicHistory(
+                            user_id=session.id1,
+                            group_id=group_id,
+                            url=pic.url,
+                            url_hash=url_hash,
+                            img_hash_dhash_segment=hash_segment,
+                            img_hash_dhash=dhash,
+                            img_width=img_width,
+                            img_height=img_height,
+                            img_hash_md5=img_hash,
+                            bot_id=session.bot_id,
+                            platform=session.platform,
+                            message_id=message.get_message_id(),
+                        )
+                        TEMP_PIC_LIST.append(record)
 
 
 @scheduler.scheduled_job(
     "interval",
     minutes=1,
+    #    minutes=1,
 )
 async def _():
     try:
