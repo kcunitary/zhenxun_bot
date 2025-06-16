@@ -1,16 +1,20 @@
+import nonebot
 from nonebot.utils import is_coroutine_callable
 from tortoise import Tortoise
 from tortoise.connection import connections
 from tortoise.models import Model as Model_
 
 from zhenxun.configs.config import BotConfig
-from zhenxun.configs.path_config import DATA_PATH
+from zhenxun.utils.exception import HookPriorityException
+from zhenxun.utils.manager.priority_manager import PriorityLifecycle
 
 from .log import logger
 
 SCRIPT_METHOD = []
 MODELS: list[str] = []
-DATABASE_SETTING_FILE = DATA_PATH / "database.json"
+
+
+driver = nonebot.get_driver()
 
 
 class Model(Model_):
@@ -28,9 +32,35 @@ class Model(Model_):
             SCRIPT_METHOD.append((cls.__module__, func))
 
 
+class DbUrlIsNode(HookPriorityException):
+    """
+    数据库链接地址为空
+    """
+
+    pass
+
+
+class DbConnectError(Exception):
+    """
+    数据库连接错误
+    """
+
+    pass
+
+
+@PriorityLifecycle.on_startup(priority=1)
 async def init():
     if not BotConfig.db_url:
-        raise Exception(f"数据库配置为空，请在.env.dev中配置DB_URL...")
+        # raise DbUrlIsNode("数据库配置为空，请在.env.dev中配置DB_URL...")
+        error = f"""
+**********************************************************************
+🌟 **************************** 配置为空 ************************* 🌟
+🚀 请打开 WebUi 进行基础配置 🚀
+🌐 配置地址：http://{driver.config.host}:{driver.config.port}/#/configure 🌐
+***********************************************************************
+***********************************************************************
+        """
+        raise DbUrlIsNode("\n" + error.strip())
     try:
         await Tortoise.init(
             db_url=BotConfig.db_url,
@@ -40,15 +70,13 @@ async def init():
         if SCRIPT_METHOD:
             db = Tortoise.get_connection("default")
             logger.debug(
-                f"即将运行SCRIPT_METHOD方法, 合计 <u><y>{len(SCRIPT_METHOD)}</y></u> 个..."
+                "即将运行SCRIPT_METHOD方法, 合计 "
+                f"<u><y>{len(SCRIPT_METHOD)}</y></u> 个..."
             )
             sql_list = []
             for module, func in SCRIPT_METHOD:
                 try:
-                    if is_coroutine_callable(func):
-                        sql = await func()
-                    else:
-                        sql = func()
+                    sql = await func() if is_coroutine_callable(func) else func()
                     if sql:
                         sql_list += sql
                 except Exception as e:
@@ -63,9 +91,9 @@ async def init():
             if sql_list:
                 logger.debug("SCRIPT_METHOD方法执行完毕!")
         await Tortoise.generate_schemas()
-        logger.info(f"Database loaded successfully!")
+        logger.info("Database loaded successfully!")
     except Exception as e:
-        raise Exception(f"数据库连接错误... e:{e}")
+        raise DbConnectError(f"数据库连接错误... e:{e}") from e
 
 
 async def disconnect():
