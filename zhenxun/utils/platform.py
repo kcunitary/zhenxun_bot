@@ -80,14 +80,14 @@ class PlatformUtils:
     @classmethod
     async def send_superuser(
         cls,
-        bot: Bot,
+        bot: Bot | None,
         message: UniMessage | str,
         superuser_id: str | None = None,
     ) -> list[tuple[str, Receipt]]:
         """发送消息给超级用户
 
         参数:
-            bot: Bot
+            bot: Bot，没有传入时使用get_bot随机获取
             message: 消息
             superuser_id: 指定超级用户id.
 
@@ -97,6 +97,8 @@ class PlatformUtils:
         返回:
             Receipt | None: Receipt
         """
+        if not bot:
+            bot = nonebot.get_bot()
         superuser_ids = []
         if superuser_id:
             superuser_ids.append(superuser_id)
@@ -227,7 +229,7 @@ class PlatformUtils:
         url = None
         if platform == "qq":
             if user_id.isdigit():
-                url = f"http://q1.qlogo.cn/g?b=qq&nk={user_id}&s=160"
+                url = f"http://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
             else:
                 url = f"https://q.qlogo.cn/qqapp/{appid}/{user_id}/640"
         return await AsyncHttpx.get_content(url) if url else None
@@ -529,9 +531,16 @@ class BroadcastEngine:
                 try:
                     self.bot_list.append(nonebot.get_bot(i))
                 except KeyError:
-                    logger.warning(f"Bot:{i} 对象未连接或不存在")
+                    logger.warning(f"Bot:{i} 对象未连接或不存在", log_cmd)
         if not self.bot_list:
-            raise ValueError("当前没有可用的Bot对象...", log_cmd)
+            try:
+                bot = nonebot.get_bot()
+                self.bot_list.append(bot)
+                logger.warning(
+                    f"广播任务未传入Bot对象，使用默认Bot {bot.self_id}", log_cmd
+                )
+            except Exception as e:
+                raise ValueError("当前没有可用的Bot对象...", log_cmd) from e
 
     async def call_check(self, bot: Bot, group_id: str) -> bool:
         """运行发送检测函数

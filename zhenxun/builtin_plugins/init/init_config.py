@@ -46,7 +46,7 @@ def _handle_config(plugin: Plugin, exists_module: list[str]):
                     reg_config.value,
                     help=reg_config.help,
                     default_value=reg_config.default_value,
-                    type=reg_config.type,
+                    type=reg_config.type,  # type: ignore
                     arg_parser=reg_config.arg_parser,
                     _override=False,
                 )
@@ -58,7 +58,7 @@ def _generate_simple_config(exists_module: list[str]):
     生成简易配置
 
     异常:
-        AttributeError: _description_
+        AttributeError: AttributeError
     """
     # 读取用户配置
     _data = {}
@@ -74,7 +74,9 @@ def _generate_simple_config(exists_module: list[str]):
                 if _data.get(module) and k in _data[module].keys():
                     Config.set_config(module, k, _data[module][k])
                 if f"{module}:{k}".lower() in exists_module:
-                    _tmp_data[module][k] = Config.get_config(module, k)
+                    _tmp_data[module][k] = Config.get_config(
+                        module, k, build_model=False
+                    )
             except AttributeError as e:
                 raise AttributeError(f"{e}\n可能为config.yaml配置文件填写不规范") from e
         if not _tmp_data[module]:
